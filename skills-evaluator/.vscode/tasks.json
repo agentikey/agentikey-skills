@@ -1,0 +1,129 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Evaluate: All Skills",
+      "type": "shell",
+      "command": "npm run eval",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "dedicated",
+        "showReuseMessage": false,
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Evaluate: Current Skill",
+      "type": "shell",
+      "command": "npm run eval -- --skill ${input:skillName}",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "dedicated",
+        "showReuseMessage": false,
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Evaluate: Single Case",
+      "type": "shell",
+      "command": "npm run eval -- --skill ${input:skillName} --case ${input:caseName}",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "dedicated",
+        "showReuseMessage": false,
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Evaluate: Serial (lowest subscription burst)",
+      "type": "shell",
+      "command": "npm run eval -- --concurrency 1",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "dedicated",
+        "showReuseMessage": false,
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Open Last Run Summary",
+      "type": "shell",
+      "command": "npm run summary",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "echo": false,
+        "reveal": "silent",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Verify Eval Environment",
+      "type": "shell",
+      "command": "npm run verify",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "dedicated",
+        "showReuseMessage": false,
+        "clear": true
+      },
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "skillName",
+      "type": "pickString",
+      "description": "Which skill to evaluate?",
+      "options": [
+        "grill-me",
+        "to-prd",
+        "prd-adversarial-review",
+        "client-intake",
+        "tech-stack-advisor",
+        "architecture-diagram",
+        "to-github-prd-issue",
+        "to-issues",
+        "decision-log"
+      ],
+      "default": "grill-me"
+    },
+    {
+      "id": "caseName",
+      "type": "promptString",
+      "description": "Case name (e.g., case-001-saas-mvp). Tab-complete in eval-cases/<skill>/.",
+      "default": "case-001"
+    }
+  ]
+}

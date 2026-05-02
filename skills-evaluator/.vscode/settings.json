@@ -1,0 +1,16 @@
+{
+  "files.associations": {
+    "*.rubric.md": "markdown"
+  },
+  "files.exclude": {
+    "**/.DS_Store": true,
+    "**/node_modules": true,
+    "runs": false
+  },
+  "search.exclude": {
+    "runs/**": true,
+    "node_modules/**": true
+  },
+  "markdown.preview.breaks": true,
+  "typescript.tsdk": "node_modules/typescript/lib"
+}
