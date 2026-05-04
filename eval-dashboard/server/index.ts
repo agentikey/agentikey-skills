@@ -1,11 +1,25 @@
 /**
  * Eval Dashboard server.
  *
- * Reads the skills-evaluator/runs/ directory and exposes three endpoints:
+ * Reads the skills-evaluator/runs/ directory and exposes endpoints for:
  *
- *   GET /api/runs                          → list all runs (newest first)
- *   GET /api/runs/:runId                   → run detail with per-case scores
- *   GET /api/runs/:runId/:skill/:caseId    → transcript + judge markdown
+ *   Run-history reads:
+ *     GET /api/runs                          → list all runs (newest first)
+ *     GET /api/runs/:runId                   → run detail with per-case scores
+ *     GET /api/runs/:runId/:skill/:caseId    → transcript + judge markdown
+ *
+ *   Discovery (Tier 2):
+ *     GET /api/skills                        → list available skills
+ *     GET /api/skills/:skill/cases           → list available cases for a skill
+ *
+ *   Run triggers (Tier 2):
+ *     POST   /api/runs                       → start a run, body: { skill?, case? }
+ *     GET    /api/runs/active                → list all active runs
+ *     GET    /api/runs/active/:tempId        → snapshot of one active run
+ *     DELETE /api/runs/active/:tempId        → cancel an active run
+ *     GET    /api/runs/active/:tempId/stream → SSE stream of progress events
+ *     GET    /api/settings                   → { maxConcurrent }
+ *     POST   /api/settings                   → update settings
  *
  * No DB. Reads everything from disk on demand. Cheap to call, easy to debug.
  */
@@ -16,6 +30,7 @@ import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
+import { runManager, HARNESS_DIR, type ProgressEvent } from "./runManager.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -24,10 +39,14 @@ const RUNS_DIR =
   process.env.RUNS_DIR ??
   resolve(__dirname, "../../skills-evaluator/runs");
 
+const EVAL_CASES_DIR =
+  process.env.EVAL_CASES_DIR ?? resolve(HARNESS_DIR, "eval-cases");
+
 const PORT = Number(process.env.PORT ?? 4000);
 
 const app = express();
 app.use(cors());
+app.use(express.json());
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
@@ -161,6 +180,12 @@ app.get("/api/health", (_req, res) => {
     ok: true,
     runsDir: RUNS_DIR,
     runsDirExists: isDir(RUNS_DIR),
+    evalCasesDir: EVAL_CASES_DIR,
+    evalCasesDirExists: isDir(EVAL_CASES_DIR),
+    harnessDir: HARNESS_DIR,
+    harnessDirExists: isDir(HARNESS_DIR),
+    maxConcurrentRuns: runManager.getMaxConcurrent(),
+    activeRuns: runManager.countActive(),
   });
 });
 
@@ -186,6 +211,14 @@ app.get("/api/runs", (_req, res) => {
   });
 
   res.json(summaries.filter(Boolean));
+});
+
+// NOTE: /api/runs/active must be registered before /api/runs/:runId to avoid
+// route shadowing. The active-run sub-routes with extra path segments (.../stream,
+// .../prune, .../:tempId) don't collide because Express matches on segment count,
+// but bare /api/runs/active and /api/runs/:runId both have three segments.
+app.get("/api/runs/active", (_req, res) => {
+  res.json(runManager.list().map(serializeRun));
 });
 
 app.get("/api/runs/:runId", (req, res) => {
@@ -219,15 +252,184 @@ app.get("/api/runs/:runId/:skill/:caseId", (req, res) => {
 });
 
 /* ------------------------------------------------------------------ */
+/* Tier 2: Discovery                                                   */
+/* ------------------------------------------------------------------ */
+
+app.get("/api/skills", (_req, res) => {
+  if (!isDir(EVAL_CASES_DIR)) {
+    res.json([]);
+    return;
+  }
+  const skills = readdirSync(EVAL_CASES_DIR)
+    .filter((entry) => isDir(join(EVAL_CASES_DIR, entry)) && !entry.startsWith("_") && !entry.startsWith("."))
+    .sort();
+  res.json(skills);
+});
+
+app.get("/api/skills/:skill/cases", (req, res) => {
+  const skillDir = join(EVAL_CASES_DIR, req.params.skill);
+  if (!isDir(skillDir)) {
+    res.status(404).json({ error: `Skill not found: ${req.params.skill}` });
+    return;
+  }
+  const cases = readdirSync(skillDir)
+    .filter((f) => f.endsWith(".md") && !f.startsWith("_"))
+    .map((f) => f.replace(/\.md$/, ""))
+    .sort();
+  res.json(cases);
+});
+
+/* ------------------------------------------------------------------ */
+/* Tier 2: Run triggers                                                */
+/* ------------------------------------------------------------------ */
+
+function serializeRun(run: ReturnType<typeof runManager.get>) {
+  if (!run) return null;
+  return {
+    tempId: run.tempId,
+    finalRunId: run.finalRunId,
+    command: run.command,
+    startedAt: run.startedAt,
+    status: run.status,
+    exitCode: run.exitCode,
+    totals: run.totals,
+    cancelRequested: run.cancelRequested,
+  };
+}
+
+app.post("/api/runs", (req, res) => {
+  const body = req.body ?? {};
+  const skill = typeof body.skill === "string" ? body.skill : undefined;
+  const caseId = typeof body.case === "string" ? body.case : undefined;
+
+  try {
+    const run = runManager.startRun({ skill, case: caseId });
+    res.status(201).json(serializeRun(run));
+  } catch (err: any) {
+    if (err.code === "MAX_CONCURRENT") {
+      res.status(409).json({ error: err.message });
+    } else {
+      res.status(500).json({ error: err.message ?? String(err) });
+    }
+  }
+});
+
+// (GET /api/runs/active is registered earlier — see route-shadowing note above.)
+
+app.get("/api/runs/active/:tempId", (req, res) => {
+  const run = runManager.get(req.params.tempId);
+  if (!run) {
+    res.status(404).json({ error: "Active run not found" });
+    return;
+  }
+  res.json(serializeRun(run));
+});
+
+app.delete("/api/runs/active/:tempId", (req, res) => {
+  const cancelled = runManager.cancel(req.params.tempId);
+  if (!cancelled) {
+    res.status(404).json({
+      error:
+        "Run not found, already finished, or already cancelled — cannot cancel.",
+    });
+    return;
+  }
+  res.json(serializeRun(runManager.get(req.params.tempId)));
+});
+
+app.get("/api/runs/active/:tempId/stream", (req, res) => {
+  const run = runManager.get(req.params.tempId);
+  if (!run) {
+    res.status(404).end();
+    return;
+  }
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders?.();
+
+  const send = (ev: ProgressEvent) => {
+    res.write(`event: ${ev.type}\n`);
+    res.write(`data: ${JSON.stringify(ev)}\n\n`);
+  };
+
+  // Replay existing events so the client gets full history
+  for (const ev of run.events) send(ev);
+
+  // If the run already finished, close the stream after the replay
+  if (
+    run.status === "completed" ||
+    run.status === "failed" ||
+    run.status === "cancelled"
+  ) {
+    res.end();
+    return;
+  }
+
+  const listener = (ev: ProgressEvent) => {
+    send(ev);
+    if (
+      ev.type === "completed" ||
+      ev.type === "failed" ||
+      ev.type === "cancelled"
+    ) {
+      // Allow the client to receive the terminal event before closing
+      setTimeout(() => res.end(), 50);
+    }
+  };
+  runManager.on(`event:${req.params.tempId}`, listener);
+
+  req.on("close", () => {
+    runManager.off(`event:${req.params.tempId}`, listener);
+  });
+});
+
+app.delete("/api/runs/active/:tempId/prune", (req, res) => {
+  const ok = runManager.prune(req.params.tempId);
+  if (!ok) {
+    res.status(409).json({
+      error: "Cannot prune: run is still active or not found.",
+    });
+    return;
+  }
+  res.json({ ok: true });
+});
+
+app.get("/api/settings", (_req, res) => {
+  res.json({ maxConcurrent: runManager.getMaxConcurrent() });
+});
+
+app.post("/api/settings", (req, res) => {
+  const body = req.body ?? {};
+  if (typeof body.maxConcurrent === "number") {
+    try {
+      runManager.setMaxConcurrent(body.maxConcurrent);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+  }
+  res.json({ maxConcurrent: runManager.getMaxConcurrent() });
+});
+
+/* ------------------------------------------------------------------ */
 /* Start                                                               */
 /* ------------------------------------------------------------------ */
 
 app.listen(PORT, () => {
   console.log(`[eval-dashboard] listening on http://localhost:${PORT}`);
-  console.log(`[eval-dashboard] runs dir: ${RUNS_DIR}`);
+  console.log(`[eval-dashboard] runs dir:       ${RUNS_DIR}`);
+  console.log(`[eval-dashboard] eval cases dir: ${EVAL_CASES_DIR}`);
+  console.log(`[eval-dashboard] harness dir:    ${HARNESS_DIR}`);
   if (!isDir(RUNS_DIR)) {
     console.warn(
       `[eval-dashboard] WARNING: runs dir does not exist. Set RUNS_DIR env var or run from eval-dashboard/`
+    );
+  }
+  if (!isDir(HARNESS_DIR)) {
+    console.warn(
+      `[eval-dashboard] WARNING: harness dir does not exist — run triggers will fail. Set HARNESS_DIR env var.`
     );
   }
 });

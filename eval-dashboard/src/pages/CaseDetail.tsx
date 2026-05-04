@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { getCase } from "../lib/api.ts";
+import { getCase, startRun } from "../lib/api.ts";
 import type { CaseDetail as CaseDetailType } from "../lib/types.ts";
 
 export default function CaseDetail() {
@@ -11,11 +11,13 @@ export default function CaseDetail() {
     skill: string;
     caseId: string;
   }>();
+  const navigate = useNavigate();
   const [data, setData] = useState<CaseDetailType | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"side-by-side" | "judge" | "transcript">(
     "side-by-side"
   );
+  const [rerunError, setRerunError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!runId || !skill || !caseId) return;
@@ -23,6 +25,17 @@ export default function CaseDetail() {
       .then(setData)
       .catch((e) => setError(String(e)));
   }, [runId, skill, caseId]);
+
+  async function rerunCase() {
+    if (!skill || !caseId) return;
+    setRerunError(null);
+    try {
+      const r = await startRun({ skill, case: caseId });
+      navigate(`/run/${encodeURIComponent(r.tempId)}`);
+    } catch (e: any) {
+      setRerunError(e?.message ?? String(e));
+    }
+  }
 
   if (error) {
     return (
@@ -48,11 +61,25 @@ export default function CaseDetail() {
           {data.runId}
         </Link>
       </div>
-      <h1 className="text-2xl font-semibold mb-1">
-        <span className="text-slate-600">{data.skill}</span>
-        <span className="text-slate-400"> / </span>
-        <span className="font-mono">{data.caseId}</span>
-      </h1>
+      <div className="flex items-baseline justify-between flex-wrap gap-2">
+        <h1 className="text-2xl font-semibold">
+          <span className="text-slate-600">{data.skill}</span>
+          <span className="text-slate-400"> / </span>
+          <span className="font-mono">{data.caseId}</span>
+        </h1>
+        <button
+          onClick={rerunCase}
+          className="text-xs px-2 py-1 rounded bg-slate-200 text-slate-700 hover:bg-slate-300"
+          title="Re-run this single case"
+        >
+          ↻ rerun this case
+        </button>
+      </div>
+      {rerunError && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 mt-2">
+          {rerunError}
+        </div>
+      )}
 
       <div className="flex gap-1 mt-4 mb-3 text-sm">
         {(["side-by-side", "judge", "transcript"] as const).map((t) => (

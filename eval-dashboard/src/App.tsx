@@ -2,6 +2,7 @@ import { Link, Route, Routes } from "react-router-dom";
 import RunList from "./pages/RunList.tsx";
 import RunDetail from "./pages/RunDetail.tsx";
 import CaseDetail from "./pages/CaseDetail.tsx";
+import RunInProgress from "./pages/RunInProgress.tsx";
 
 export default function App() {
   return (
@@ -11,7 +12,7 @@ export default function App() {
           Eval Dashboard
         </Link>
         <span className="ml-4 text-xs text-slate-400">
-          read-only viewer · Tier 1
+          local · trigger + view eval runs
         </span>
       </header>
       <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-6">
@@ -22,11 +23,12 @@ export default function App() {
             path="/runs/:runId/:skill/:caseId"
             element={<CaseDetail />}
           />
+          <Route path="/run/:tempId" element={<RunInProgress />} />
         </Routes>
       </main>
       <footer className="text-xs text-slate-500 text-center py-3 border-t border-slate-200">
-        Reads from <code className="font-mono">skills-evaluator/runs/</code>.
-        Trigger new runs from the harness CLI for now.
+        Reads <code className="font-mono">skills-evaluator/runs/</code> · spawns{" "}
+        <code className="font-mono">npm run eval</code> on demand
       </footer>
     </div>
   );

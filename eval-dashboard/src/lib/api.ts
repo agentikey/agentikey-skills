@@ -1,11 +1,26 @@
-import type { RunSummary, RunDetail, CaseDetail } from "./types.ts";
+import type {
+  RunSummary,
+  RunDetail,
+  CaseDetail,
+  ActiveRunSummary,
+  Settings,
+} from "./types.ts";
 
-async function fetchJson<T>(path: string): Promise<T> {
-  const res = await fetch(path);
+async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, init);
   if (!res.ok) {
-    throw new Error(
-      `${path} → ${res.status} ${res.statusText}: ${await res.text()}`
+    let detail = "";
+    try {
+      detail = await res.text();
+    } catch {
+      // ignore
+    }
+    const err = new Error(
+      `${path} → ${res.status} ${res.statusText}${detail ? ": " + detail : ""}`
     );
+    (err as any).status = res.status;
+    (err as any).body = detail;
+    throw err;
   }
   return res.json() as Promise<T>;
 }
@@ -28,4 +43,61 @@ export function getCase(
       skill
     )}/${encodeURIComponent(caseId)}`
   );
+}
+
+export function listSkills(): Promise<string[]> {
+  return fetchJson<string[]>("/api/skills");
+}
+
+export function listCases(skill: string): Promise<string[]> {
+  return fetchJson<string[]>(
+    `/api/skills/${encodeURIComponent(skill)}/cases`
+  );
+}
+
+export function startRun(opts: {
+  skill?: string;
+  case?: string;
+}): Promise<ActiveRunSummary> {
+  return fetchJson<ActiveRunSummary>("/api/runs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(opts),
+  });
+}
+
+export function listActiveRuns(): Promise<ActiveRunSummary[]> {
+  return fetchJson<ActiveRunSummary[]>("/api/runs/active");
+}
+
+export function getActiveRun(tempId: string): Promise<ActiveRunSummary> {
+  return fetchJson<ActiveRunSummary>(
+    `/api/runs/active/${encodeURIComponent(tempId)}`
+  );
+}
+
+export function cancelRun(tempId: string): Promise<ActiveRunSummary> {
+  return fetchJson<ActiveRunSummary>(
+    `/api/runs/active/${encodeURIComponent(tempId)}`,
+    { method: "DELETE" }
+  );
+}
+
+export function pruneRun(tempId: string): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>(
+    `/api/runs/active/${encodeURIComponent(tempId)}/prune`,
+    { method: "DELETE" }
+  );
+}
+
+export function getSettings(): Promise<Settings> {
+  return fetchJson<Settings>("/api/settings");
+}
+
+export function updateSettings(settings: Partial<Settings>): Promise<Settings> {
+  return fetchJson<Settings>("/api/settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(settings),
+  });
 }

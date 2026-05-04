@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { listRuns } from "../lib/api.ts";
 import type { RunSummary } from "../lib/types.ts";
+import RunControls from "../components/RunControls.tsx";
+import ActiveRunsPanel from "../components/ActiveRunsPanel.tsx";
 
 function formatTimestamp(iso: string): string {
   // The runId is an ISO-ish string with colons/periods replaced by hyphens.
@@ -38,15 +40,23 @@ export default function RunList() {
     return <p className="text-slate-500">Loading runs…</p>;
   }
 
-  if (runs.length === 0) {
-    return (
-      <div className="rounded border border-slate-300 bg-white p-6 text-center text-slate-600">
-        No runs found. Run <code className="font-mono">npm run eval</code> in
-        the harness directory first.
-      </div>
-    );
-  }
+  return (
+    <div>
+      <RunControls />
+      <ActiveRunsPanel />
 
+      {runs.length === 0 ? (
+        <div className="rounded border border-slate-300 bg-white p-6 text-center text-slate-600">
+          No completed runs yet. Trigger one from the controls above.
+        </div>
+      ) : (
+        <RunsTable runs={runs} />
+      )}
+    </div>
+  );
+}
+
+function RunsTable({ runs }: { runs: RunSummary[] }) {
   return (
     <div>
       <h1 className="text-2xl font-semibold mb-4">Eval Runs</h1>

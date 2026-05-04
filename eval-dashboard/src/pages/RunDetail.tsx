@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { getRun } from "../lib/api.ts";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { getRun, startRun } from "../lib/api.ts";
 import type { RunDetail as RunDetailType } from "../lib/types.ts";
 
 export default function RunDetail() {
   const { runId } = useParams<{ runId: string }>();
+  const navigate = useNavigate();
   const [run, setRun] = useState<RunDetailType | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [rerunError, setRerunError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!runId) return;
@@ -14,6 +16,16 @@ export default function RunDetail() {
       .then(setRun)
       .catch((e) => setError(String(e)));
   }, [runId]);
+
+  async function rerunSkill(skill: string) {
+    setRerunError(null);
+    try {
+      const r = await startRun({ skill });
+      navigate(`/run/${encodeURIComponent(r.tempId)}`);
+    } catch (e: any) {
+      setRerunError(e?.message ?? String(e));
+    }
+  }
 
   if (error) {
     return (
@@ -57,15 +69,30 @@ export default function RunDetail() {
         )}
       </p>
 
+      {rerunError && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 mb-4">
+          {rerunError}
+        </div>
+      )}
+
       <div className="space-y-6">
         {Object.entries(casesBySkill).map(([skill, cases]) => (
           <section key={skill}>
-            <h2 className="text-lg font-semibold mb-2">
-              {skill}{" "}
-              <span className="text-sm font-normal text-slate-500">
-                ({cases.filter((c) => c.passed).length}/{cases.length})
-              </span>
-            </h2>
+            <div className="flex items-baseline justify-between mb-2">
+              <h2 className="text-lg font-semibold">
+                {skill}{" "}
+                <span className="text-sm font-normal text-slate-500">
+                  ({cases.filter((c) => c.passed).length}/{cases.length})
+                </span>
+              </h2>
+              <button
+                onClick={() => rerunSkill(skill)}
+                className="text-xs px-2 py-1 rounded bg-slate-200 text-slate-700 hover:bg-slate-300"
+                title={`Re-run all cases for ${skill}`}
+              >
+                ↻ rerun skill
+              </button>
+            </div>
             <div className="rounded border border-slate-300 bg-white overflow-hidden">
               <table className="w-full text-sm">
                 <thead className="bg-slate-100 text-slate-700">
