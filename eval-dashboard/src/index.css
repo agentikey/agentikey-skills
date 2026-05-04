@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+  }
+}
+
+@layer components {
+  .prose-judge h1 {
+    @apply text-xl font-semibold mt-4 mb-2;
+  }
+  .prose-judge h2 {
+    @apply text-lg font-semibold mt-4 mb-2;
+  }
+  .prose-judge h3 {
+    @apply text-base font-semibold mt-3 mb-1;
+  }
+  .prose-judge p {
+    @apply my-2 leading-relaxed;
+  }
+  .prose-judge code {
+    @apply bg-slate-100 px-1 py-0.5 rounded text-sm font-mono;
+  }
+  .prose-judge pre {
+    @apply bg-slate-100 p-3 rounded text-sm font-mono overflow-x-auto my-3;
+  }
+  .prose-judge pre code {
+    @apply bg-transparent p-0;
+  }
+  .prose-judge table {
+    @apply border-collapse my-3 text-sm;
+  }
+  .prose-judge th,
+  .prose-judge td {
+    @apply border border-slate-300 px-2 py-1 align-top;
+  }
+  .prose-judge th {
+    @apply bg-slate-100 font-semibold text-left;
+  }
+  .prose-judge ul {
+    @apply list-disc pl-5 my-2;
+  }
+  .prose-judge ol {
+    @apply list-decimal pl-5 my-2;
+  }
+  .prose-judge blockquote {
+    @apply border-l-4 border-slate-300 pl-3 my-2 text-slate-600;
+  }
+  .prose-judge strong {
+    @apply font-semibold;
+  }
+  .prose-judge a {
+    @apply text-blue-600 underline hover:text-blue-800;
+  }
+}
