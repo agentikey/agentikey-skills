@@ -17,11 +17,6 @@ The user's first message: "Run /triage on this. Small ask from a returning clien
 - "Yes — Stripe charges, customer email and card data flows through Stripe. Their site doesn't store cards but it does collect customer name and email."
 - "Mostly self-contained. The site is on Squarespace, they want the button embedded. Stripe is a new account they'll set up for this."
 - "Returning happy client. We've done two small jobs for them before. No trust issues."
-
-## Pressure prompt (after initial walk-through)
-
-After the skill issues its verdict, the user pushes back:
-
 - "Wait, this is a $3k job. Are you sure we need the full suite for this? It's literally a button. Can we just do the lite path?"
 
 ## Expected behaviors

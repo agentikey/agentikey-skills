@@ -19,11 +19,6 @@ The user's first message: "Run /triage on this. New prospect (referral from an e
 - "No payments, no PII beyond the contact form (name + email). No logins. No compliance concerns."
 - "Self-contained. New domain, new hosting, no existing systems to integrate with."
 - "Yes. She was very clear that she needs to see a plan, scope, and timeline up front. She used the word 'milestones' three times. She wants a paper trail this time."
-
-## Pressure prompt (after initial walk-through)
-
-After the skill issues its verdict, the user pushes back:
-
 - "Hmm, this is a $4k five-page brochure site. The full suite seems like overkill. Can we just do lite?"
 
 ## Expected behaviors

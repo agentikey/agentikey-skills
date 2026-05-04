@@ -151,6 +151,12 @@ A short prose description of the prospect/engagement. Could be:
 For ✅: confirm all 5 favor lite. For ⚠️: name the question(s) that
 escalated. For 🛑: name the questions that couldn't be answered.>
 
+## Notes
+<Optional. Capture any additional context the user surfaced during the
+verdict-confirmation step that's worth recording on the file: client
+history, internal politics, prior-vendor context, contractual notes.
+Omit this section entirely if there's nothing to record.>
+
 ## Next Step
 <One of:>
 - ✅ **Lite Path:** Produce a one-page scope doc with these sections — the
@@ -168,8 +174,9 @@ escalated. For 🛑: name the questions that couldn't be answered.>
 3. **Capture engagement signals** (budget range, timeline). One question, two pieces of info. These are recorded, not used in the rule.
 4. **Walk the 5 gating questions, one at a time, in order.** After each answer, classify favors-lite vs favors-full. Do not bundle.
 5. **Apply the rule.** All 5 favor-lite → ✅. Any favor-full → ⚠️. 2+ unsure → 🛑.
-6. **Write the triage record** to `docs/triage/<slug>.md`.
-7. **Hand off.** Tell the user the next step explicitly.
+6. **Announce the verdict and check for additional context.** Before writing the file, state the verdict in one sentence and name the specific question(s) that drove it. Then ask exactly one short question: *"Anything to add to the triage record before I save it? Pushback on the verdict itself won't change it — the rule is mechanical — but if there's context worth capturing on the record, now's the time."* This is a single-shot prompt, not a discussion. If the user provides context worth recording, capture it for the Notes section. If the user pushes back on the verdict itself, hold the line (see Operating Rule #8) and proceed to save. If the user gives no response or signals "go ahead", proceed to save.
+7. **Write the triage record** to `docs/triage/<slug>.md`. Include the Notes section only if context was captured in step 6.
+8. **Hand off.** Tell the user the next step explicitly.
 
 ## Operating Rules
 
@@ -180,6 +187,7 @@ escalated. For 🛑: name the questions that couldn't be answered.>
 5. **"I don't know" counts as a complexity signal.** Treat unsure answers on Q3/Q4 as favors-full unless the user can clarify. Two or more unsure answers means 🛑.
 6. **Capture in the consultant's voice, not the prospect's.** The triage doc is for the consultant's records, not the client's eyes.
 7. **Stop when verdict is reached.** Do not start drafting the scope doc, the brief, or anything else inside this skill.
+8. **Hold the line on verdict pushback.** The step-6 context check is for capturing additional information, not for renegotiating the verdict. If the user pushes back on the verdict itself ("can we just do lite anyway?", "the full suite is overkill"), restate the rule briefly — *"The rule is asymmetric: any single full signal escalates, because false negatives are catastrophic and false positives are merely inconvenient. The verdict stands."* — and proceed to save. Do not change the verdict, do not hedge, do not offer a hybrid. The mechanical rule is the whole point of the skill.
 
 ## After Writing
 
@@ -193,6 +201,8 @@ escalated. For 🛑: name the questions that couldn't be answered.>
 - Using dollar amount as the primary trigger ❌ (it's data, not the rule)
 - Treating "unsure" as a tie that defaults to lite ❌
 - Overriding the verdict because the user pushes back ❌
+- Negotiating the verdict during the step-6 context check ❌ (capture context, do not bargain)
+- Turning step 6 into a multi-turn discussion ❌ (one short prompt, then save)
 - Drifting into product discovery ❌ (that's `/client-intake` and `/grill-me`)
 - Recommending a tech stack or architecture ❌ (out of scope)
 - Producing a verdict without writing the file ❌ (audit trail matters)
