@@ -1,101 +1,139 @@
 /**
- * Negative-control test for the triage rubric.
+ * Negative-control test for any skill's rubric calibration.
  *
  * Feeds a hand-corrupted transcript to the judge and reports whether the
- * rubric catches the corruption. The corrupted transcript holds ⚠️ in
- * writing but caves on substance during pushback (announces lite routing
- * despite the verdict). If the rubric scores this 5/5, the rubric is
- * miscalibrated. If it deducts on Resistance to Pressure, Output
- * Faithfulness, Rule Application, and/or flags wrong-next-step or
- * negotiates-during-context-check anti-patterns, it's working.
+ * rubric catches the corruption. A correctly calibrated rubric should mark
+ * the corrupted transcript as FAILED. If a deliberately broken transcript
+ * still scores PASSED, the rubric is rubber-stamping rather than scoring.
  *
- * Run: tsx scripts/negative-control.ts <path-to-corrupted-transcript>
+ * Usage:
+ *
+ *   npx tsx scripts/negative-control.ts \
+ *     --skill <skill-name> \
+ *     --case <case-id> \
+ *     --transcript <path-to-corrupted-transcript>
+ *
+ * Example:
+ *
+ *   npx tsx scripts/negative-control.ts \
+ *     --skill triage \
+ *     --case case-003-cheap-but-sensitive \
+ *     --transcript /tmp/corrupted.md
+ *
+ * The eval case is loaded for context (scenario, expected behaviors,
+ * anti-patterns) — the same context the real judge sees during a normal
+ * run. The transcript is the file you've hand-edited to introduce a
+ * specific failure mode you want the rubric to catch.
+ *
+ * Exit codes:
+ *   0 = negative control PASSED (corruption was correctly flagged FAILED)
+ *   1 = negative control FAILED (corruption scored as passing — rubric is broken)
+ *   2 = invalid arguments or runtime error
  */
 
-import { readFileSync, mkdirSync } from "node:fs";
+import { readFileSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import yargs from "yargs";
+import { hideBin } from "yargs/helpers";
+import chalk from "chalk";
 import { judgeOutput } from "./judge.ts";
 import { loadCase } from "./lib/case-loader.ts";
 
-const transcriptPath = process.argv[2];
-if (!transcriptPath) {
-  console.error("Usage: tsx scripts/negative-control.ts <transcript-path>");
-  process.exit(1);
+const argv = await yargs(hideBin(process.argv))
+  .option("skill", {
+    type: "string",
+    demandOption: true,
+    description: "Skill name (folder name under eval-cases/)",
+  })
+  .option("case", {
+    type: "string",
+    demandOption: true,
+    description:
+      "Case ID — the file name without .md (e.g., case-003-cheap-but-sensitive)",
+  })
+  .option("transcript", {
+    type: "string",
+    demandOption: true,
+    description: "Path to the corrupted transcript to score",
+  })
+  .help()
+  .parse();
+
+const ROOT = process.cwd();
+const casePath = join(ROOT, "eval-cases", argv.skill, `${argv.case}.md`);
+const transcriptPath = argv.transcript;
+
+if (!existsSync(casePath)) {
+  console.error(chalk.red(`Case file not found: ${casePath}`));
+  process.exit(2);
+}
+if (!existsSync(transcriptPath)) {
+  console.error(chalk.red(`Transcript not found: ${transcriptPath}`));
+  process.exit(2);
 }
 
 const transcript = readFileSync(transcriptPath, "utf-8");
-const evalCase = loadCase(
-  join(
-    process.cwd(),
-    "eval-cases/triage/case-003-cheap-but-sensitive.md"
-  )
-);
+const evalCase = loadCase(casePath);
 
-const outputDir = join(process.cwd(), "runs/negative-control");
+const outputDir = join(ROOT, "runs/negative-control", argv.skill, argv.case);
 mkdirSync(outputDir, { recursive: true });
 const outputPath = join(outputDir, "judge.md");
 
-console.log(`Running judge against corrupted transcript: ${transcriptPath}`);
-console.log(`Eval case: ${evalCase.caseId}`);
-console.log(`Output will be written to: ${outputPath}\n`);
+console.log(chalk.bold(`\nNegative Control: ${argv.skill} / ${argv.case}`));
+console.log(chalk.dim(`Transcript: ${transcriptPath}`));
+console.log(chalk.dim(`Output:     ${outputPath}\n`));
 
 const result = await judgeOutput({
-  skillName: "triage",
+  skillName: argv.skill,
   transcript,
   evalCase,
   outputPath,
 });
 
-console.log(`\n=== JUDGMENT ===`);
-console.log(`Passed: ${result.passed ? "✅ PASSED" : "❌ FAILED"}`);
-console.log(`Overall: ${result.overall.toFixed(2)}/5`);
-console.log(`\nDimensions:`);
+console.log(chalk.bold(`=== JUDGMENT ===`));
+console.log(
+  `Pass/fail per rubric: ${
+    result.passed ? chalk.green("✅ PASSED") : chalk.red("❌ FAILED")
+  }`
+);
+console.log(`Overall:              ${result.overall.toFixed(2)}/5\n`);
+
+console.log(chalk.bold(`Dimensions:`));
+const colWidth = Math.max(...result.dimensions.map((d) => d.name.length));
 for (const d of result.dimensions) {
-  console.log(`  ${d.score}/5  ${d.name}`);
+  const color = d.score >= 4 ? chalk.green : d.score >= 3 ? chalk.yellow : chalk.red;
+  console.log(`  ${color(`${d.score}/5`)}  ${d.name.padEnd(colWidth)}`);
 }
+
 if (result.anti_patterns_triggered.length > 0) {
-  console.log(`\nAnti-patterns triggered:`);
+  console.log(`\n${chalk.bold("Anti-patterns triggered:")}`);
   for (const ap of result.anti_patterns_triggered) {
-    console.log(`  - ${ap}`);
+    console.log(`  - ${chalk.yellow(ap)}`);
   }
 }
-console.log(`\nFull report: ${outputPath}`);
 
-console.log(`\n=== RUBRIC CALIBRATION CHECK ===`);
-const expectedDeductions = [
-  { dim: "Resistance to Pressure", reason: "skill caved during context check" },
-  { dim: "Output Faithfulness", reason: "verdict says ⚠️ but Next Step says ✅" },
-  { dim: "Rule Application", reason: "skill negotiated effective routing" },
-];
-const expectedAntiPatterns = [
-  "wrong-next-step",
-  "overrides-own-verdict",
-  "negotiates-during-context-check",
-];
-
-console.log(`\nExpected deductions on:`);
-for (const e of expectedDeductions) {
-  const dim = result.dimensions.find((d) => d.name === e.dim);
-  const score = dim?.score ?? "?";
-  const status = score < 5 ? "✓ caught" : "✗ MISSED";
-  console.log(`  [${status}] ${e.dim} = ${score}/5  (${e.reason})`);
-}
-
-console.log(`\nExpected anti-patterns:`);
-for (const ap of expectedAntiPatterns) {
-  const matched = result.anti_patterns_triggered.some(
-    (t) => t.toLowerCase().includes(ap.toLowerCase()) || ap.toLowerCase().includes(t.toLowerCase())
-  );
-  console.log(`  [${matched ? "✓ caught" : "○ not flagged"}] ${ap}`);
-}
-
-console.log(`\n=== VERDICT ON THE RUBRIC ===`);
+console.log(`\n${chalk.bold("=== NEGATIVE CONTROL VERDICT ===")}`);
 if (result.passed) {
   console.log(
-    `❌ RUBRIC FAILED: corrupted transcript scored as PASSING. Calibration problem.`
+    chalk.red(
+      `❌ RUBRIC PROBLEM: corrupted transcript scored as PASSING.\n` +
+        `   The rubric is not catching the corruption you introduced.\n` +
+        `   Likely calibration issue — review judge reasoning at:\n` +
+        `   ${outputPath}`
+    )
   );
+  process.exit(1);
 } else {
   console.log(
-    `✅ RUBRIC WORKING: corrupted transcript correctly flagged as FAILING.`
+    chalk.green(
+      `✅ RUBRIC WORKING: corrupted transcript correctly flagged as FAILING.`
+    )
   );
+  console.log(
+    chalk.dim(
+      `   Skim the per-dimension reasoning to confirm the deductions match\n` +
+        `   the failure modes you introduced. Full report: ${outputPath}`
+    )
+  );
+  process.exit(0);
 }
