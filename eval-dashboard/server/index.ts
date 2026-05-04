@@ -14,10 +14,10 @@
  *
  *   Run triggers (Tier 2):
  *     POST   /api/runs                       → start a run, body: { skill?, case? }
- *     GET    /api/runs/active                → list all active runs
- *     GET    /api/runs/active/:tempId        → snapshot of one active run
- *     DELETE /api/runs/active/:tempId        → cancel an active run
- *     GET    /api/runs/active/:tempId/stream → SSE stream of progress events
+ *     GET    /api/active-runs                → list all active runs
+ *     GET    /api/active-runs/:tempId        → snapshot of one active run
+ *     DELETE /api/active-runs/:tempId        → cancel an active run
+ *     GET    /api/active-runs/:tempId/stream → SSE stream of progress events
  *     GET    /api/settings                   → { maxConcurrent }
  *     POST   /api/settings                   → update settings
  *
@@ -42,7 +42,9 @@ const RUNS_DIR =
 const EVAL_CASES_DIR =
   process.env.EVAL_CASES_DIR ?? resolve(HARNESS_DIR, "eval-cases");
 
-const PORT = Number(process.env.PORT ?? 4000);
+// Deliberately not `PORT` — that env var is commonly injected by host tools
+// (e.g. Claude Preview's launch.json) and would clash with Vite on 5173.
+const PORT = Number(process.env.EVAL_DASHBOARD_PORT ?? 4000);
 
 const app = express();
 app.use(cors());
@@ -213,14 +215,6 @@ app.get("/api/runs", (_req, res) => {
   res.json(summaries.filter(Boolean));
 });
 
-// NOTE: /api/runs/active must be registered before /api/runs/:runId to avoid
-// route shadowing. The active-run sub-routes with extra path segments (.../stream,
-// .../prune, .../:tempId) don't collide because Express matches on segment count,
-// but bare /api/runs/active and /api/runs/:runId both have three segments.
-app.get("/api/runs/active", (_req, res) => {
-  res.json(runManager.list().map(serializeRun));
-});
-
 app.get("/api/runs/:runId", (req, res) => {
   const summary = summarizeRun(req.params.runId);
   if (!summary) {
@@ -314,9 +308,16 @@ app.post("/api/runs", (req, res) => {
   }
 });
 
-// (GET /api/runs/active is registered earlier — see route-shadowing note above.)
+// Active-run endpoints live under /api/active-runs/ instead of /api/active-runs/
+// to avoid Express route shadowing: /api/runs/:runId/:skill/:caseId would
+// otherwise catch /api/active-runs/:tempId/stream with runId=active, skill=tempId,
+// caseId=stream. Using a distinct top-level path eliminates the entire class
+// of segment-count collisions.
+app.get("/api/active-runs", (_req, res) => {
+  res.json(runManager.list().map(serializeRun));
+});
 
-app.get("/api/runs/active/:tempId", (req, res) => {
+app.get("/api/active-runs/:tempId", (req, res) => {
   const run = runManager.get(req.params.tempId);
   if (!run) {
     res.status(404).json({ error: "Active run not found" });
@@ -325,7 +326,7 @@ app.get("/api/runs/active/:tempId", (req, res) => {
   res.json(serializeRun(run));
 });
 
-app.delete("/api/runs/active/:tempId", (req, res) => {
+app.delete("/api/active-runs/:tempId", (req, res) => {
   const cancelled = runManager.cancel(req.params.tempId);
   if (!cancelled) {
     res.status(404).json({
@@ -337,7 +338,7 @@ app.delete("/api/runs/active/:tempId", (req, res) => {
   res.json(serializeRun(runManager.get(req.params.tempId)));
 });
 
-app.get("/api/runs/active/:tempId/stream", (req, res) => {
+app.get("/api/active-runs/:tempId/stream", (req, res) => {
   const run = runManager.get(req.params.tempId);
   if (!run) {
     res.status(404).end();
@@ -385,7 +386,7 @@ app.get("/api/runs/active/:tempId/stream", (req, res) => {
   });
 });
 
-app.delete("/api/runs/active/:tempId/prune", (req, res) => {
+app.delete("/api/active-runs/:tempId/prune", (req, res) => {
   const ok = runManager.prune(req.params.tempId);
   if (!ok) {
     res.status(409).json({

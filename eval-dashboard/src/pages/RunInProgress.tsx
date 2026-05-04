@@ -34,7 +34,7 @@ export default function RunInProgress() {
     // Snapshot first so we have status even if SSE drops
     getActiveRun(tempId).then(setRun).catch((e) => setError(String(e)));
 
-    const es = new EventSource(`/api/runs/active/${encodeURIComponent(tempId)}/stream`);
+    const es = new EventSource(`/api/active-runs/${encodeURIComponent(tempId)}/stream`);
 
     function applyEvent(ev: ProgressEventType) {
       switch (ev.type) {

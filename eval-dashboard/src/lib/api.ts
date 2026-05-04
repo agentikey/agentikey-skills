@@ -67,25 +67,25 @@ export function startRun(opts: {
 }
 
 export function listActiveRuns(): Promise<ActiveRunSummary[]> {
-  return fetchJson<ActiveRunSummary[]>("/api/runs/active");
+  return fetchJson<ActiveRunSummary[]>("/api/active-runs");
 }
 
 export function getActiveRun(tempId: string): Promise<ActiveRunSummary> {
   return fetchJson<ActiveRunSummary>(
-    `/api/runs/active/${encodeURIComponent(tempId)}`
+    `/api/active-runs/${encodeURIComponent(tempId)}`
   );
 }
 
 export function cancelRun(tempId: string): Promise<ActiveRunSummary> {
   return fetchJson<ActiveRunSummary>(
-    `/api/runs/active/${encodeURIComponent(tempId)}`,
+    `/api/active-runs/${encodeURIComponent(tempId)}`,
     { method: "DELETE" }
   );
 }
 
 export function pruneRun(tempId: string): Promise<{ ok: boolean }> {
   return fetchJson<{ ok: boolean }>(
-    `/api/runs/active/${encodeURIComponent(tempId)}/prune`,
+    `/api/active-runs/${encodeURIComponent(tempId)}/prune`,
     { method: "DELETE" }
   );
 }
